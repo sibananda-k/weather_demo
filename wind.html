@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Wind Velocity Map</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+    <style>
+      body, html {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+      }
+      #map {
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-velocity@2.1.4/dist/leaflet-velocity.min.js"></script>
+
+    <script>
+      const map = L.map('map', {
+        center: [52.37, 4.89],
+        zoom: 10,
+        minZoom: 2,
+        maxZoom: 18,
+        maxBounds: [[-60, -180], [60, 180]],
+        maxBoundsViscosity: 1.0
+      });
+
+      const osm = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors",
+      }).addTo(map);
+
+      const seamarks = L.tileLayer("https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png", {
+        attribution: "Map data: &copy; <a href='http://www.openseamap.org'>OpenSeaMap</a>",
+        transparent: true,
+        opacity: 1.0,
+        crossOrigin: ''
+      }).addTo(map);
+
+      // Placeholder for wind layer
+      let velocityLayer = null;
+
+      // Create a custom toggle control for wind
+      const overlays = {
+        "Seamarks": seamarks,
+        "Wind Velocity": {
+          addTo: () => {
+            if (velocityLayer) {
+              map.addLayer(velocityLayer);
+            } else {
+              // fetch and add
+              fetch("wind.json")
+                .then((resp) => resp.json())
+                .then((data) => {
+                  velocityLayer = L.velocityLayer({
+                    displayValues: true,
+                    displayOptions: {
+                      velocityType: "Wind",
+                      position: "bottomleft",
+                      emptyString: "No wind data",
+                      angleConvention: "bearingCW",
+                      showCardinal: false,
+                      speedUnit: "m/s",
+                      directionString: "Direction",
+                      speedString: "Speed",
+                    },
+                    data: data,
+                    maxVelocity: 20,
+                    velocityScale: 0.005,
+                    bounds: L.latLngBounds([-60, -180], [60, 180]),
+                    colorScale: ["#00ffff", "#0000ff", "#ffff00", "#ff0000", "#800000"],
+                    opacity: 0.8,
+                  });
+                  velocityLayer.addTo(map);
+                })
+                .catch((e) => console.error("Failed to load wind data:", e));
+            }
+          },
+          remove: () => {
+            if (velocityLayer && map.hasLayer(velocityLayer)) {
+              map.removeLayer(velocityLayer);
+            }
+          }
+        }
+      };
+
+      // Hook into Leaflet control.layers() toggle event
+      const overlayLayers = {
+        "Seamarks": seamarks,
+        "Wind Velocity": L.layerGroup() // dummy, just to appear in the control
+      };
+
+      const control = L.control.layers(null, overlayLayers, { collapsed: false }).addTo(map);
+
+      // Custom toggle logic
+      map.on('overlayadd', function(e) {
+        if (e.name === "Wind Velocity") {
+          overlays["Wind Velocity"].addTo();
+        }
+      });
+
+      map.on('overlayremove', function(e) {
+        if (e.name === "Wind Velocity") {
+          overlays["Wind Velocity"].remove();
+        }
+      });
+    </script>
+  </body>
+</html>
